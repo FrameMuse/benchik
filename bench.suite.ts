@@ -1,5 +1,18 @@
 const units = ["ps", "ns", "µs", "ms", "s"]
+const UNSET = Symbol('unset')
 
+function mulberry32(seed = 0x12345678) {
+  let t = seed >>> 0
+  return function () {
+    t += 0x6D2B79F5
+    let r = Math.imul(t ^ (t >>> 15), 1 | t)
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296
+  }
+} //     mulberry32(0xDEADBEEF)
+
+
+let randomFactory = mulberry32(0xDEADBEEF)
 
 export function bench(callback: () => void): void
 export function bench(label: string, callback: () => void): void
@@ -9,28 +22,40 @@ export function bench(label: string | (() => void), callback: () => void = () =>
     label = callback.toString().replace(/^\(\)\s*=>\s*/m, "").replace(/\n+/g, " ").replace(/\s+/g, " ")
   }
 
-  const prevCallback = callback
-  callback = () => {
+
+  function onBefore() {
     if (groupTTT.fresh != null) {
       Object.assign(groupTTT.fresh.values, groupTTT.fresh.factory())
     }
-
-    prevCallback()
   }
 
+  randomFactory = mulberry32(0xDEADBEEF)
   // Warmup.
-  runFor(callback, 50)
+  runFor({ callback, ms: 50, onBefore })
 
   const aggregate = groupTTT.options?.aggregate ?? median
   const format = groupTTT.options?.format ?? formatTime
 
+  randomFactory = mulberry32(0xDEADBEEF)
+
+  const resultsOut: unknown[] = []
   // Measure.
-  const time = aggregate(runFor(callback, 50))
+  const time = aggregate(runFor({ callback, ms: 50, onBefore, resultsOut }))
   const defaultMessages = ["\x1b[90m%s\x1b[0m", `[${format(time)}]`]
 
   if (groupTTT.label) {
     groupTTT.attempts!.push(time)
-    groupTTT.callbacks!.push(minmax => console.log(...defaultMessages, ...getasd(minmax, time), label))
+    // groupTTT.results!.push(result)
+    groupTTT.callbacks!.push(minmax => {
+      const getAssertMark = () => {
+        if (groupTTT.assert === UNSET) return []
+        if (resultsOut.every(x => x === groupTTT.assert)) return ['\x1b[92m%s\x1b[0m', '[✓]']
+
+        return ['\x1b[91m%s\x1b[0m', '[✗]']
+      }
+
+      console.log(...defaultMessages, ...getasd(minmax, time), ...getAssertMark(), label)
+    })
   } else {
     console.log(...defaultMessages, label)
   }
@@ -47,6 +72,7 @@ export namespace bench {
 
   export interface Group {
     fresh<T extends FreshRecord>(factory: () => T): T
+    assert?: unknown
   }
 
   export interface FreshRecord extends Record<keyof never, unknown> { }
@@ -56,6 +82,9 @@ export namespace bench {
     groupTTT(label)
     return {
       [Symbol.dispose]: groupTTT.end,
+
+      get assert() { return groupTTT.assert === UNSET ? undefined : groupTTT.assert },
+      set assert(v: unknown) { groupTTT.assert = v },
 
       fresh(factory) {
         const values = factory()
@@ -84,6 +113,8 @@ export namespace bench {
   }
   export function reset(): void { }
 
+  export function random(): number { return randomFactory() }
+
   export const agg = {
     median: median as typeof median,
     average: average as typeof average
@@ -96,6 +127,8 @@ function groupTTT(label: string): void {
   groupTTT.label = label
   groupTTT.attempts = []
   groupTTT.callbacks = []
+  groupTTT.results = []
+  groupTTT.assert = UNSET
 }
 namespace groupTTT {
   export declare let attempts: number[] | null
@@ -104,6 +137,8 @@ namespace groupTTT {
   export declare let options: bench.Options | null | undefined
   export declare let fresh: { factory: () => bench.FreshRecord, values: bench.FreshRecord } | null | undefined
   export declare let snapshot: {} | null
+  export declare let assert: unknown
+  export declare let results: unknown[] | null
 
   export function end(): void {
     if (label == null) return
@@ -117,6 +152,8 @@ namespace groupTTT {
     groupTTT.attempts = null
     groupTTT.callbacks = null
     groupTTT.options = null
+    groupTTT.assert = UNSET
+    groupTTT.results = null
   }
 }
 
@@ -151,9 +188,12 @@ function average(items: ArrayIterator<number>): number {
 }
 
 
-function* runFor(callback: () => void, ms?: number): Generator<number> {
+function* runFor(options: { callback: () => void, ms?: number, onBefore?: () => void, resultsOut?: unknown[] }): Generator<number> {
+  const { callback, ms, onBefore, resultsOut } = options
+
   let gt = performance.now()
   let i = 0
+  let result
   while (true) {
     i++
     if (i > 50_000) break
@@ -161,9 +201,12 @@ function* runFor(callback: () => void, ms?: number): Generator<number> {
       if ((performance.now() - gt) >= ms) break
     }
 
+    onBefore?.()
     const t = performance.now()
-    blackhole(callback())
+    result = callback()
     yield performance.now() - t
+
+    resultsOut?.push(result)
   }
 }
 

@@ -1,0 +1,34 @@
+{
+  "name": "benchik",
+  "version": "0.0.0",
+  "description": "A tiny benchmark library with via a simple `console.log` and `console.group`, works nicely in a browser and terminal",
+  "type": "module",
+  "main": "./bench.suite.ts",
+  "types": "./bench.suite.ts",
+  "exports": {
+    ".": {
+      "types": "./bench.suite.ts",
+      "default": "./bench.suite.ts"
+    }
+  },
+  "files": [
+    "bench.suite.ts",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit"
+  },
+  "keywords": [
+    "benchmark",
+    "bench",
+    "performance",
+    "profiling",
+    "typescript"
+  ],
+  "author": "Valery Zinchenko",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}
