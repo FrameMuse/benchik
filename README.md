@@ -18,7 +18,7 @@ bench("for loop",  () => { const a = []; for (let i = 0; i < 1000; i++) a.push(i
 npm i benchik
 ```
 
-Benchik ships as raw TypeScript — import it directly with any ESM-compatible runtime (Bun, tsx, ts-node, or a bundler like Vite/esbuild).
+Benchik ships as raw TypeScript, import it directly with any ESM-compatible runtime (Bun, tsx, ts-node, or a bundler like Vite/esbuild).
 
 ## Usage
 
@@ -74,7 +74,7 @@ g.assert = [1, 2, 3, 4, 5]
 bench("unsorted", () => [3, 1, 5, 2, 4])
 bench("sorted", () => [3, 1, 5, 2, 4].sort())
 // → [40.00ns] [✗] unsorted
-// → [50.00ms] [✓] sorted
+// → [50.00µs] [✓] sorted
 ```
 
 ### Deterministic randomness
