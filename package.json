@@ -1,24 +1,16 @@
 {
   "name": "benchik",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "A tiny benchmark library with via a simple `console.log` and `console.group`, works nicely in a browser and terminal",
   "type": "module",
   "main": "./dist/bench.suite.js",
   "types": "./dist/bench.suite.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/bench.suite.d.ts",
-      "import": "./dist/bench.suite.js",
-      "default": "./dist/bench.suite.js"
-    }
-  },
   "files": [
     "dist",
     "LICENSE"
   ],
   "scripts": {
-    "build": "vite build",
-    "check": "tsc --noEmit"
+    "build": "vite build"
   },
   "keywords": [
     "benchmark",
@@ -30,7 +22,7 @@
   "author": "Valery Zinchenko",
   "license": "MIT",
   "devDependencies": {
-    "typescript": "^5.8.0",
+    "typescript": "^6.0.3",
     "vite": "^8.0.14",
     "vite-plugin-dts": "^5.0.1"
   }
