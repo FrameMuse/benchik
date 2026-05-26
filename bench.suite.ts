@@ -49,7 +49,7 @@ export function bench(label: string | (() => void), callback: () => void = () =>
     groupTTT.callbacks!.push(minmax => {
       const getAssertMark = () => {
         if (groupTTT.assert === UNSET) return []
-        if (resultsOut.every(x => x === groupTTT.assert)) return ['\x1b[92m%s\x1b[0m', '[✓]']
+        if (resultsOut.every(x => jsonStringify(x) === groupTTT.assertJson)) return ['\x1b[92m%s\x1b[0m', '[✓]']
 
         return ['\x1b[91m%s\x1b[0m', '[✗]']
       }
@@ -84,7 +84,7 @@ export namespace bench {
       [Symbol.dispose]: groupTTT.end,
 
       get assert() { return groupTTT.assert === UNSET ? undefined : groupTTT.assert },
-      set assert(v: unknown) { groupTTT.assert = v },
+      set assert(v: unknown) { groupTTT.assert = v; groupTTT.assertJson = jsonStringify(v) },
 
       fresh(factory) {
         const values = factory()
@@ -138,6 +138,7 @@ namespace groupTTT {
   export declare let fresh: { factory: () => bench.FreshRecord, values: bench.FreshRecord } | null | undefined
   export declare let snapshot: {} | null
   export declare let assert: unknown
+  export declare let assertJson: string | null
   export declare let results: unknown[] | null
 
   export function end(): void {
@@ -153,6 +154,7 @@ namespace groupTTT {
     groupTTT.callbacks = null
     groupTTT.options = null
     groupTTT.assert = UNSET
+    groupTTT.assertJson = null
     groupTTT.results = null
   }
 }
@@ -180,6 +182,21 @@ function formatTime(ms: number) {
   const unitIndex = Math.floor(Math.log10(ms) / 3) + 3
   const value = ms / 1000 ** (unitIndex - 3)
   return value.toLocaleString("en", { minimumIntegerDigits: 3, minimumFractionDigits: 2 }) + units[unitIndex]
+}
+
+function jsonStringify(value: unknown): string {
+  const seen = new WeakMap<object, number>()
+  let id = 0
+
+  return JSON.stringify(value, function (key, val) {
+    if (typeof val === 'object' && val !== null) {
+      if (seen.has(val)) {
+        return `[Circular->${seen.get(val)}]`
+      }
+      seen.set(val, ++id)
+    }
+    return val
+  })
 }
 
 function average(items: ArrayIterator<number>): number {
@@ -210,8 +227,6 @@ function* runFor(options: { callback: () => void, ms?: number, onBefore?: () => 
   }
 }
 
-let sink: any
-const blackhole = (x: any) => { sink = x }
 
 function median(items: ArrayIterator<number>): number {
   const sorted = items.toArray().sort((a, b) => a - b)
