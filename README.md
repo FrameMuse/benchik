@@ -102,7 +102,13 @@ bench("rand test", () => {
 ### Wait for JIT compilation
 
 ```ts
+// Declare static variables and compute things.
+const d1 = []
+const d2 = [2,3,4]
+
+// Wait for JIT to make sure the first benchmark doesn't get slowed down.
 await bench.untilCompiled()
+
 bench("first test", () => { /* ... */ })
 ```
 
@@ -149,22 +155,17 @@ Returns a promise that resolves after 200ms, giving the runtime time to JIT-comp
 
 Benchik uses only universally available APIs:
 
-- **`performance.now()`** — the high-resolution monotonic clock available in all browsers and Node.js/Bun/Deno
-- **`console.log` / `console.group` / `console.groupEnd`** — native console output everywhere
-- **ANSI escape codes** for color — rendered natively in terminals, ignored by browsers
+- **`performance.now()`**: the high-resolution monotonic clock available in all browsers and Node.js/Bun/Deno
+- **`console.log` / `console.group` / `console.groupEnd`**: native console output everywhere
+- **ANSI escape codes** for color
 
 No DOM, no Node-specific APIs, no runtime-specific imports. The same code runs identically in both environments.
 
-## Why it's fast
-
-- **Generator-based measurement** — `runFor` is a generator that yields individual timing samples. No intermediate arrays are allocated until the aggregation step, minimizing GC pressure.
-- **Median aggregation** — default aggregation uses the median, which is robust to outliers (GC pauses, OS scheduling) and gives a more representative measurement than the mean.
-- **Deterministic PRNG** — the mulberry32 PRNG is reseeded with the same value before both warmup and measurement, ensuring identical random inputs and eliminating a common source of benchmark variance.
-- **Safety cap** — maximum 50,000 iterations per run prevents infinite loops for extremely fast callbacks.
-
 ## Why it's reliable
 
-- **Warmup phase** — the callback runs for 50ms before measurement begins. This allows JIT compilation to stabilize and CPU caches to warm, so the first measurement isn't artificially slow.
-- **Fresh data pattern** — `g.fresh()` creates a new data object for each iteration, preventing state mutations from one run affecting the cost of the next (a common pitfall in JS microbenchmarks).
-- **No dependencies** — zero third-party code means zero risk of dependency-related performance noise or version conflicts.
-- **`using` declarations** — groups implement `Symbol.dispose`, so group boundaries are always correctly closed even if code exits early.
+- **Warmup phase**: the callback runs for 50ms before measurement begins. This allows JIT compilation to stabilize and CPU caches to warm, so the first measurement isn't artificially slow.
+- **Deterministic random**: the mulberry32 randomizer is reset with the same value before both warmup and measurement, ensuring identical random inputs and eliminating a benchmark variance.
+- **Fresh data pattern**: `g.fresh()` creates a new data object for each iteration, preventing state mutations from one run affecting the cost of the next (a common pitfall in JS microbenchmarks).
+- **Median aggregation**: default aggregation uses the median, which is robust to outliers (GC pauses, OS scheduling) and gives a more representative measurement than the mean.
+- Runs each benchmark either for 50ms or 50_000 times, which works great both for very slow and very fast programs.
+- **No dependencies**: zero third-party code means zero risk of dependency-related performance noise or version conflicts.
