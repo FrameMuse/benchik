@@ -3,20 +3,21 @@
   "version": "0.0.0",
   "description": "A tiny benchmark library with via a simple `console.log` and `console.group`, works nicely in a browser and terminal",
   "type": "module",
-  "main": "./bench.suite.ts",
-  "types": "./bench.suite.ts",
+  "main": "./dist/bench.suite.js",
+  "types": "./dist/bench.suite.d.ts",
   "exports": {
     ".": {
-      "types": "./bench.suite.ts",
-      "default": "./bench.suite.ts"
+      "types": "./dist/bench.suite.d.ts",
+      "import": "./dist/bench.suite.js",
+      "default": "./dist/bench.suite.js"
     }
   },
   "files": [
-    "bench.suite.ts",
+    "dist",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "vite build",
     "check": "tsc --noEmit"
   },
   "keywords": [
@@ -29,6 +30,8 @@
   "author": "Valery Zinchenko",
   "license": "MIT",
   "devDependencies": {
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vite": "^8.0.14",
+    "vite-plugin-dts": "^5.0.1"
   }
 }

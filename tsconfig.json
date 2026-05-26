@@ -14,6 +14,9 @@
     "rootDir": "."
   },
   "include": [
-    "*.ts"
+    "bench.suite.ts"
+  ],
+  "exclude": [
+    "vite.config.ts"
   ]
 }
