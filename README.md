@@ -175,6 +175,41 @@ await bench.untilCompiled()
 }
 ```
 
+## Browser usage
+
+Benchik works natively in the browser, just import from a CDN:
+
+```js
+const { bench } = await import("https://esm.sh/benchik")
+```
+
+```js
+using _ = bench.group("Array Populate")
+
+bench("dynamic (push)", () => {
+  const array = []
+  for (let i = 0; i < MAX; i++) array.push(new asd)
+  return array
+})
+bench("dynamic (no push)", () => {
+  const array = []
+  for (let i = 0; i < MAX; i++) array[i] = new asd
+  return array
+})
+```
+
+Or via module script:
+
+```html
+<script type="module">
+import { bench } from "https://esm.sh/benchik"
+
+using g = bench.group("DOM tests")
+bench("createElement", () => document.createElement("div"))
+bench("querySelector", () => document.querySelector("body"))
+</script>
+```
+
 ## API
 
 ### `bench(label?, callback)`

@@ -1,6 +1,6 @@
 {
   "name": "benchik",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A tiny benchmark library with via a simple `console.log` and `console.group`, works nicely in a browser and terminal",
   "type": "module",
   "main": "./dist/bench.suite.js",

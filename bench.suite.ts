@@ -142,7 +142,7 @@ namespace groupTTT {
   export declare let results: unknown[] | null
 
   export function end(): void {
-    if (label == null) return
+    if (groupTTT.label == null) return
 
     console.group(groupTTT.label)
     const minmax = [Math.min(...groupTTT.attempts ?? []), Math.max(...groupTTT.attempts ?? [])] as const
