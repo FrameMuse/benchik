@@ -1,3 +1,28 @@
+const hasProcess = typeof (globalThis as any).process !== 'undefined'
+
+const useAnsi = hasProcess && (() => {
+  const p = (globalThis as any).process
+  const { env = {}, argv = [], platform = '' } = p
+
+  if ('NO_COLOR' in env || argv.includes('--no-color')) return false
+  if ('FORCE_COLOR' in env || argv.includes('--color')) return true
+  if (env.TERM === 'dumb') return false
+  if (platform === 'win32') return true
+  if ('CI' in env && ('GITHUB_ACTIONS' in env || 'GITLAB_CI' in env || 'CIRCLECI' in env)) return true
+  if (p.stdout && p.stdout.isTTY) return true
+
+  return false
+})()
+
+const ansi: Record<string, string> = { gray: '90', blue: '94', red: '91', green: '92', lightGreen: '38;5;114' }
+const css: Record<string, string> = { gray: 'color: gray', blue: 'color: #5599ff', red: 'color: #ff5555', green: 'color: #55cc55', lightGreen: 'color: #87d787' }
+
+function clr(color: string, text: string): string[] {
+  if (!hasProcess) return [`%c${text}`, css[color]]
+  if (useAnsi) return [`\x1b[${ansi[color]}m%s\x1b[0m`, text]
+  return [text]
+}
+
 const units = ["ps", "ns", "µs", "ms", "s"]
 const UNSET = Symbol('unset')
 
@@ -41,7 +66,7 @@ export function bench(label: string | (() => void), callback: () => void = () =>
   const resultsOut: unknown[] = []
   // Measure.
   const time = aggregate(runFor({ callback, ms: 50, onBefore, resultsOut }))
-  const defaultMessages = ["\x1b[90m%s\x1b[0m", `[${format(time)}]`]
+  const defaultMessages = clr('gray', `[${format(time)}]`)
 
   if (groupTTT.label) {
     groupTTT.attempts!.push(time)
@@ -49,9 +74,9 @@ export function bench(label: string | (() => void), callback: () => void = () =>
     groupTTT.callbacks!.push(minmax => {
       const getAssertMark = () => {
         if (groupTTT.assert === UNSET) return []
-        if (resultsOut.every(x => jsonStringify(x) === groupTTT.assertJson)) return ['\x1b[92m%s\x1b[0m', '[✓]']
+        if (resultsOut.every(x => jsonStringify(x) === groupTTT.assertJson)) return clr('green', '[✓]')
 
-        return ['\x1b[91m%s\x1b[0m', '[✗]']
+        return clr('red', '[✗]')
       }
 
       console.log(...defaultMessages, ...getasd(minmax, time), ...getAssertMark(), label)
@@ -161,16 +186,13 @@ namespace groupTTT {
 
 function getasd([min, max]: readonly [number, number], time: number): string[] {
   if (time === min) {
-    // Blue.
-    return ["\x1b[94m%s\x1b[0m", "[fastest]"]
+    return clr('blue', '[fastest]')
   }
   if (time > min) {
-    // Red.
-    return ["\x1b[91m%s\x1b[0m", `[+${((time / min)).toFixed(2)}x]`]
+    return clr('red', `[+${((time / min)).toFixed(2)}x]`)
   }
   if (time < min) {
-    // Green.
-    return ["\x1b[38;5;114m%s\x1b[0m", `[-<${formatTime(min + time)}]`]
+    return clr('lightGreen', `[-<${formatTime(min + time)}]`)
   }
 
   return []
