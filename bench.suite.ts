@@ -240,28 +240,26 @@ function* runFor(options: { callback: () => void, ms?: number, onBefore?: () => 
   const { callback, ms, onBefore, resultsOut } = options
 
   const gt = performance.now()
-  let i = 0
+
   let result
   let batchStart = gt
   let batchCalls = 0
-  while (true) {
-    i++
-    if (i > 50_000) break
-    if (ms != null) {
-      if ((performance.now() - gt) >= ms) break
-    }
 
+  for (let i = 0; i < 50_000; i++) {
     onBefore?.()
     result = callback()
     batchCalls++
-
     resultsOut?.push(result)
-
+  
     const now = performance.now()
     if (now > batchStart) {
       yield (now - batchStart) / batchCalls
       batchStart = now
       batchCalls = 0
+    }
+
+    if (ms != null) {
+      if ((performance.now() - gt) >= ms) break
     }
   }
 }
