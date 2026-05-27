@@ -230,9 +230,11 @@ function average(items: ArrayIterator<number>): number {
 function* runFor(options: { callback: () => void, ms?: number, onBefore?: () => void, resultsOut?: unknown[] }): Generator<number> {
   const { callback, ms, onBefore, resultsOut } = options
 
-  let gt = performance.now()
+  const gt = performance.now()
   let i = 0
   let result
+  let batchStart = gt
+  let batchCalls = 0
   while (true) {
     i++
     if (i > 50_000) break
@@ -241,11 +243,17 @@ function* runFor(options: { callback: () => void, ms?: number, onBefore?: () => 
     }
 
     onBefore?.()
-    const t = performance.now()
     result = callback()
-    yield performance.now() - t
+    batchCalls++
 
     resultsOut?.push(result)
+
+    const now = performance.now()
+    if (now > batchStart) {
+      yield (now - batchStart) / batchCalls
+      batchStart = now
+      batchCalls = 0
+    }
   }
 }
 
