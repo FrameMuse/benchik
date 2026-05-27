@@ -79,7 +79,16 @@ export function bench(label: string | (() => void), callback: () => void = () =>
         return clr('red', '[✗]')
       }
 
-      console.log(...defaultMessages, ...getasd(minmax, time), ...getAssertMark(), label)
+      const asdMessages = getasd(minmax, time)
+      const assertMessages = getAssertMark()
+      if (!hasProcess) {
+        const flat = [...defaultMessages, ...asdMessages, ...assertMessages]
+        const fmt = flat.filter((_, i) => i % 2 === 0)
+        const styles = flat.filter((_, i) => i % 2 === 1)
+        console.log(fmt.join(' '), ...styles, label)
+      } else {
+        console.log(...defaultMessages, ...asdMessages, ...assertMessages, label)
+      }
     })
   } else {
     console.log(...defaultMessages, label)
