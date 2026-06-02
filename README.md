@@ -106,8 +106,7 @@ bench("first test", () => { /* ... */ })
 The JS engines may optimize pure functions that doesn't really do anything.
 To avoid skipping over iterations or function execution, always return the output of iterations.
 
-For example, if you're benchmarking `for` loop iteration speed, you should setup some quick calculations
-like summing many numbers or pushing numbers to array.
+For example, if you're benchmarking `for` loop iteration speed, you should setup some quick calculations like summing many numbers or pushing numbers to array and then **returning them**. If you don't return anything and just do empty iterations, the engine **might** skip them.
 
 ```js
 const MAX = 1_000
@@ -127,9 +126,9 @@ Even though these calculations introduce overhead, it's very often tolerable
 
 ### Relativeness & Fairness (advice)
 
-When measuring speed, the actual numbers matter, but usually it's more important how one option/approach/solution is better over another one.
+When measuring speed, the actual numbers matter, but usually it's more important how an option/approach/solution is better/faster over another one.
 
-So remember to make sure your benchmarks are fair to each other, e.g. init same amount of variables, do the same setups to measure that something is indeed relatively faster.
+So remember to make sure your benchmarks are fair to each other, e.g. init same amount of variables, do the same setups. It should be clear what you're actually measuring and **comparing** between.
 
 ### Full Example
 
@@ -174,6 +173,25 @@ await bench.untilCompiled()
   })
 }
 ```
+
+Then simply run the file with your JS runtime, for example:
+
+```bash
+bun benchmark/array.js
+```
+
+And you will have result like this:
+
+```bash
+Array Populate
+  [038.272µs] [+1.46x] dynamic (push)
+  [034.935µs] [+1.33x] dynamic (no push)
+  [035.316µs] [+1.34x] dynamic (no push via length)
+  [029.726µs] [+1.13x] pre-allocate
+  [026.259µs] [fastest] reusing
+```
+
+This example is also placed at [`./examples/array.js`](./examples/array.js).
 
 ## Browser usage
 
@@ -273,5 +291,6 @@ No DOM, no Node-specific APIs, no runtime-specific imports. The same code runs i
 
 ## Why you may not need it
 
-- Benchmarks are measured in perfect conditions, which may not be what you need.
-- This library doesn't measure time deviations, it only produces final measurement stable across multiple runs.
+- Benchmarks are measured in perfect conditions, which works most of the time, but might not be what you need.
+- This library doesn't measure time deviations, only final measurement, stable across multiple runs.
+- This library doesn't measure memory usage.
