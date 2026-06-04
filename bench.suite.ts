@@ -47,52 +47,30 @@ export function bench(label: string | (() => void), callback: () => void = () =>
     label = callback.toString().replace(/^\(\)\s*=>\s*/m, "").replace(/\n+/g, " ").replace(/\s+/g, " ")
   }
 
-
   function onBefore() {
     if (groupTTT.fresh != null) {
       Object.assign(groupTTT.fresh.values, groupTTT.fresh.factory())
     }
   }
 
-  randomFactory = mulberry32(0xDEADBEEF)
-  // Warmup.
-  runFor({ callback, ms: 50, onBefore })
-
   const aggregate = groupTTT.options?.aggregate ?? median
   const format = groupTTT.options?.format ?? formatTime
+
+  if (groupTTT.label) {
+    groupTTT.tasks!.push({ callback, label: label as string, onBefore, aggregate, format, index: groupTTT.tasks!.length })
+    return
+  }
+
+  randomFactory = mulberry32(0xDEADBEEF)
+  runFor({ callback, ms: 50, onBefore })
 
   randomFactory = mulberry32(0xDEADBEEF)
 
   const resultsOut: unknown[] = []
-  // Measure.
   const time = aggregate(runFor({ callback, ms: 50, onBefore, resultsOut }))
   const defaultMessages = clr('gray', `[${format(time)}]`)
 
-  if (groupTTT.label) {
-    groupTTT.attempts!.push(time)
-    // groupTTT.results!.push(result)
-    groupTTT.callbacks!.push(minmax => {
-      const getAssertMark = () => {
-        if (groupTTT.assert === UNSET) return []
-        if (resultsOut.every(x => jsonStringify(x) === groupTTT.assertJson)) return clr('green', '[✓]')
-
-        return clr('red', '[✗]')
-      }
-
-      const asdMessages = getasd(minmax, time)
-      const assertMessages = getAssertMark()
-      if (!hasProcess) {
-        const flat = [...defaultMessages, ...asdMessages, ...assertMessages]
-        const fmt = flat.filter((_, i) => i % 2 === 0)
-        const styles = flat.filter((_, i) => i % 2 === 1)
-        console.log(fmt.join(' '), ...styles, label)
-      } else {
-        console.log(...defaultMessages, ...asdMessages, ...assertMessages, label)
-      }
-    })
-  } else {
-    console.log(...defaultMessages, label)
-  }
+  console.log(...defaultMessages, label)
 }
 
 export namespace bench {
@@ -159,12 +137,23 @@ function groupTTT(label: string): void {
   if (groupTTT.label != null) groupTTT.end()
 
   groupTTT.label = label
+  groupTTT.tasks = []
   groupTTT.attempts = []
   groupTTT.callbacks = []
   groupTTT.results = []
   groupTTT.assert = UNSET
 }
+interface Task {
+  callback: () => void
+  label: string
+  onBefore?: () => void
+  aggregate: (items: ArrayIterator<number>) => number
+  format: (value: number) => string
+  index: number
+}
+
 namespace groupTTT {
+  export declare let tasks: Task[] | null
   export declare let attempts: number[] | null
   export declare let callbacks: ((minmax: readonly [number, number]) => void)[] | null
   export declare let label: string | null
@@ -178,12 +167,64 @@ namespace groupTTT {
   export function end(): void {
     if (groupTTT.label == null) return
 
+    const tasks = groupTTT.tasks
+    if (!tasks) return
+
+    // Fisher-Yates shuffle
+    for (let i = tasks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[tasks[i], tasks[j]] = [tasks[j], tasks[i]]
+    }
+
+    interface Result {
+      time: number
+      resultsOut: unknown[]
+      label: string
+      format: (value: number) => string
+      index: number
+    }
+    const results: Result[] = []
+
+    for (const task of tasks) {
+      randomFactory = mulberry32(0xDEADBEEF)
+      runFor({ callback: task.callback, ms: 50, onBefore: task.onBefore })
+
+      randomFactory = mulberry32(0xDEADBEEF)
+      const resultsOut: unknown[] = []
+      const time = task.aggregate(runFor({ callback: task.callback, ms: 50, onBefore: task.onBefore, resultsOut }))
+      results.push({ time, resultsOut, label: task.label, format: task.format, index: task.index })
+    }
+
+    results.sort((a, b) => a.index - b.index)
+
+    const times = results.map(r => r.time)
+    const minmax = [Math.min(...times), Math.max(...times)] as const
+
     console.group(groupTTT.label)
-    const minmax = [Math.min(...groupTTT.attempts ?? []), Math.max(...groupTTT.attempts ?? [])] as const
-    groupTTT.callbacks?.forEach(callback => callback(minmax))
+    for (const result of results) {
+      const defaultMessages = clr('gray', `[${result.format(result.time)}]`)
+      const asdMessages = getasd(minmax, result.time)
+
+      const getAssertMark = () => {
+        if (groupTTT.assert === UNSET) return []
+        if (result.resultsOut.every(x => jsonStringify(x) === groupTTT.assertJson)) return clr('green', '[✓]')
+        return clr('red', '[✗]')
+      }
+      const assertMessages = getAssertMark()
+
+      if (!hasProcess) {
+        const flat = [...defaultMessages, ...asdMessages, ...assertMessages]
+        const fmt = flat.filter((_, i) => i % 2 === 0)
+        const styles = flat.filter((_, i) => i % 2 === 1)
+        console.log(fmt.join(' '), ...styles, result.label)
+      } else {
+        console.log(...defaultMessages, ...asdMessages, ...assertMessages, result.label)
+      }
+    }
     console.groupEnd()
 
     groupTTT.label = null
+    groupTTT.tasks = null
     groupTTT.attempts = null
     groupTTT.callbacks = null
     groupTTT.options = null
@@ -252,14 +293,14 @@ function* runFor(options: { callback: () => void, ms?: number, onBefore?: () => 
     resultsOut?.push(result)
   
     const now = performance.now()
-    if (now > batchStart) {
+    if (now !== batchStart) {
       yield (now - batchStart) / batchCalls
       batchStart = now
       batchCalls = 0
     }
 
     if (ms != null) {
-      if ((performance.now() - gt) >= ms) break
+      if ((now - gt) >= ms) break
     }
   }
 }
