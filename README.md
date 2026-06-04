@@ -63,6 +63,30 @@ bench("push",      () => { f.array.push(4) })
 bench("spread",    () => { const x = [...f.array, 4] })
 ```
 
+### Memory measurement
+
+Track per-call memory delta using `process.memoryUsage` (Node/Bun/Deno only). The group title shows the initial RSS as a baseline `|60MB|`; each benchmark reports its per-call delta and the multiplier relative to that baseline.
+
+The library calibrates framework overhead by running an empty benchmark ~100ms, then subtracts the median overhead from each result.
+
+```ts
+using g = bench.group("String Allocation")
+g.memory = process.memoryUsage
+
+bench("no allocation", () => 42)
+bench("allocate 10kB",  () => "x".repeat(10_000))
+bench("allocate 100kB", () => "x".repeat(100_000))
+```
+
+```
+String Allocation |60MB|
+  [091.00ns] [fastest] [+0B +1.00x] no allocation
+  [004.739µs] [+47.39x] [+11kB +1.00x] allocate 10kB
+  [038.413µs] [+384.13x] [+99kB +1.00x] allocate 100kB
+```
+
+`+11kB` is the per-call memory (RSS delta ÷ total iterations) after subtracting framework overhead. `+1.00x` means the total is identical to the baseline (for tiny deltas). If `afterMem < beforeMem` (e.g. GC ran during measurement), the benchmark re-runs once; if the anomaly persists the memory result is shown as `[+1.00x]`.
+
 ### Assertions
 
 Verify that every iteration returns the same value:
@@ -242,6 +266,7 @@ Creates a console group. Returns a `Disposable` object (works with `using` decla
 |----------|-------------|
 | `fresh(factory)` | Returns fresh values per iteration |
 | `assert` | Expected return value for all iterations |
+| `memory` | Set to `process.memoryUsage` to enable per-call memory measurement. Calibrates overhead automatically. |
 
 ### `bench.random()`
 
@@ -293,4 +318,3 @@ No DOM, no Node-specific APIs, no runtime-specific imports. The same code runs i
 
 - Benchmarks are measured in perfect conditions, which works most of the time, but might not be what you need.
 - This library doesn't measure time deviations, only final measurement, stable across multiple runs.
-- This library doesn't measure memory usage.

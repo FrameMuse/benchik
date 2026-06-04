@@ -85,6 +85,7 @@ export namespace bench {
   export interface Group {
     fresh<T extends FreshRecord>(factory: () => T): T
     assert?: unknown
+    memory?: () => { rss: number }
   }
 
   export interface FreshRecord extends Record<keyof never, unknown> { }
@@ -103,6 +104,9 @@ export namespace bench {
         groupTTT.fresh = { factory, values }
         return values
       },
+
+      get memory() { return groupTTT.memory },
+      set memory(fn) { groupTTT.memory = fn },
     }
   }
 
@@ -163,6 +167,7 @@ namespace groupTTT {
   export declare let assert: unknown
   export declare let assertJson: string | null
   export declare let results: unknown[] | null
+  export declare let memory: (() => { rss: number }) | undefined
 
   export function end(): void {
     if (groupTTT.label == null) return
@@ -182,7 +187,30 @@ namespace groupTTT {
       label: string
       format: (value: number) => string
       index: number
+      memoryDelta?: number
+      memoryMultiplier?: number
     }
+    let memoryOverhead = 0
+    if (groupTTT.memory) {
+      const emptyCal = () => {}
+      const overheads: number[] = []
+      for (let i = 0; i < 2; i++) {
+        randomFactory = mulberry32(0xDEADBEEF)
+        const resultsOut: unknown[] = []
+        const tc = { value: 0 }
+        const beforeMem = groupTTT.memory().rss
+        for (const _ of runFor({ callback: emptyCal, ms: 50, resultsOut, totalCalls: tc })) {}
+        const afterMem = groupTTT.memory().rss
+        if (afterMem >= beforeMem) {
+          overheads.push((afterMem - beforeMem) / tc.value)
+        }
+      }
+      if (overheads.length > 0) {
+        memoryOverhead = overheads.reduce((a, b) => a + b, 0) / overheads.length
+      }
+    }
+
+    const initialBg = groupTTT.memory?.()?.rss ?? 0
     const results: Result[] = []
 
     for (const task of tasks) {
@@ -191,8 +219,54 @@ namespace groupTTT {
 
       randomFactory = mulberry32(0xDEADBEEF)
       const resultsOut: unknown[] = []
-      const time = task.aggregate(runFor({ callback: task.callback, ms: 50, onBefore: task.onBefore, resultsOut }))
-      results.push({ time, resultsOut, label: task.label, format: task.format, index: task.index })
+      const tc = { value: 0 }
+      const beforeMem = groupTTT.memory?.()?.rss ?? 0
+      const time = task.aggregate(runFor({
+        callback: task.callback, ms: 50, onBefore: task.onBefore, resultsOut, totalCalls: tc
+      }))
+      const afterMem = groupTTT.memory?.()?.rss ?? 0
+
+      const result: Result = { time, resultsOut, label: task.label, format: task.format, index: task.index }
+
+      if (groupTTT.memory) {
+        let forgot = false
+        let rawDelta = afterMem - beforeMem
+
+        if (rawDelta < 0) {
+          randomFactory = mulberry32(0xDEADBEEF)
+          runFor({ callback: task.callback, ms: 50, onBefore: task.onBefore })
+
+          randomFactory = mulberry32(0xDEADBEEF)
+          const resultsOut2: unknown[] = []
+          const tc2 = { value: 0 }
+          const beforeMem2 = groupTTT.memory().rss
+          const time2 = task.aggregate(runFor({
+            callback: task.callback, ms: 50, onBefore: task.onBefore, resultsOut: resultsOut2, totalCalls: tc2
+          }))
+          const afterMem2 = groupTTT.memory().rss
+
+          rawDelta = afterMem2 - beforeMem2
+          if (rawDelta >= 0) {
+            result.time = time2
+            result.resultsOut = resultsOut2
+            tc.value = tc2.value
+          } else {
+            forgot = true
+          }
+        }
+
+        if (forgot) {
+          result.memoryDelta = -1
+          result.memoryMultiplier = 1
+        } else {
+          const rawPerCall = rawDelta / tc.value
+          const adjustedDelta = Math.max(0, rawPerCall - memoryOverhead)
+          result.memoryDelta = adjustedDelta
+          result.memoryMultiplier = initialBg > 0 ? (initialBg + adjustedDelta) / initialBg : 1
+        }
+      }
+
+      results.push(result)
     }
 
     results.sort((a, b) => a.index - b.index)
@@ -200,10 +274,20 @@ namespace groupTTT {
     const times = results.map(r => r.time)
     const minmax = [Math.min(...times), Math.max(...times)] as const
 
-    console.group(groupTTT.label)
+    if (groupTTT.memory && initialBg > 0) {
+      console.group(groupTTT.label + ' |' + formatMemory(initialBg) + '|')
+    } else {
+      console.group(groupTTT.label)
+    }
     for (const result of results) {
       const defaultMessages = clr('gray', `[${result.format(result.time)}]`)
       const asdMessages = getasd(minmax, result.time)
+
+      const memoryMessages = (() => {
+        if (result.memoryDelta == null) return []
+        if (result.memoryDelta === -1) return clr('gray', '[+1.00x]')
+        return clr('gray', `[+${formatMemory(result.memoryDelta)} +${(result.memoryMultiplier ?? 0).toFixed(2)}x]`)
+      })()
 
       const getAssertMark = () => {
         if (groupTTT.assert === UNSET) return []
@@ -213,12 +297,12 @@ namespace groupTTT {
       const assertMessages = getAssertMark()
 
       if (!hasProcess) {
-        const flat = [...defaultMessages, ...asdMessages, ...assertMessages]
+        const flat = [...defaultMessages, ...asdMessages, ...memoryMessages, ...assertMessages]
         const fmt = flat.filter((_, i) => i % 2 === 0)
         const styles = flat.filter((_, i) => i % 2 === 1)
         console.log(fmt.join(' '), ...styles, result.label)
       } else {
-        console.log(...defaultMessages, ...asdMessages, ...assertMessages, result.label)
+        console.log(...defaultMessages, ...asdMessages, ...memoryMessages, ...assertMessages, result.label)
       }
     }
     console.groupEnd()
@@ -256,6 +340,20 @@ function formatTime(ms: number) {
   return value.toLocaleString("en", { minimumIntegerDigits: 3, minimumFractionDigits: 2 }) + units[unitIndex]
 }
 
+function formatMemory(bytes: number): string {
+  if (bytes < 0) bytes = 0
+  if (bytes === 0) return "0B"
+  const memUnits = ['B', 'kB', 'MB', 'GB']
+  const divisor = 1024
+  let unitIndex = 0
+  let value = bytes
+  while (value >= divisor && unitIndex < memUnits.length - 1) {
+    value /= divisor
+    unitIndex++
+  }
+  return value.toFixed(0) + memUnits[unitIndex]
+}
+
 function jsonStringify(value: unknown): string {
   const seen = new WeakMap<object, number>()
   let id = 0
@@ -277,8 +375,8 @@ function average(items: ArrayIterator<number>): number {
 }
 
 
-function* runFor(options: { callback: () => void, ms?: number, onBefore?: () => void, resultsOut?: unknown[] }): Generator<number> {
-  const { callback, ms, onBefore, resultsOut } = options
+function* runFor(options: { callback: () => void, ms?: number, onBefore?: () => void, resultsOut?: unknown[], totalCalls?: { value: number } }): Generator<number> {
+  const { callback, ms, onBefore, resultsOut, totalCalls } = options
 
   const gt = performance.now()
 
@@ -291,6 +389,7 @@ function* runFor(options: { callback: () => void, ms?: number, onBefore?: () => 
     result = callback()
     batchCalls++
     resultsOut?.push(result)
+    if (totalCalls) totalCalls.value++
   
     const now = performance.now()
     if (now !== batchStart) {
